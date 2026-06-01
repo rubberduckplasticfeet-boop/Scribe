@@ -4,12 +4,6 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Scribe</title>
-    <!-- PWA Support -->
-  <link rel="manifest" href="manifest.json">
-  <meta name="theme-color" content="#a855f7">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <link rel="apple-touch-icon" href="https://via.placeholder.com/192x192/8b5cf6/ffffff?text=S">
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css">
   <style>
@@ -53,6 +47,15 @@
         <button onclick="openSettings()" class="w-full flex items-center gap-3 py-3 px-4 hover:bg-gray-800 rounded-xl">
           <i class="fas fa-cog"></i> Settings
         </button>
+        
+        <!-- Transfer Features Added -->
+        <button onclick="exportAllStories()" class="w-full flex items-center gap-3 py-3 px-4 hover:bg-gray-800 rounded-xl text-green-400">
+          <i class="fas fa-download"></i> Export All Stories
+        </button>
+        <button onclick="document.getElementById('import-file').click()" class="w-full flex items-center gap-3 py-3 px-4 hover:bg-gray-800 rounded-xl text-blue-400">
+          <i class="fas fa-upload"></i> Import Stories
+        </button>
+        <input type="file" id="import-file" accept=".json" style="display:none" onchange="importStories(event)">
       </div>
     </div>
 
@@ -80,7 +83,13 @@
       <div class="p-4 border-b border-gray-800 font-medium">AI Writing Assistant</div>
       
       <div class="p-4 border-b border-gray-800">
-        <input id="api-key" type="password" placeholder="Gemini API Key" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm">
+        <label class="text-xs text-gray-500 block mb-1">AI Provider</label>
+        <select id="ai-provider" onchange="switchProvider()" class="w-full bg-gray-800 rounded-lg p-2 mb-3 text-sm">
+          <option value="gemini">Gemini 2.5 Flash</option>
+          <option value="deepseek">DeepSeek Chat</option>
+          <option value="groq">Groq (Llama)</option>
+        </select>
+        <input id="api-key" type="password" placeholder="API Key" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm">
       </div>
 
       <div class="p-4 border-b border-gray-800">
@@ -122,7 +131,6 @@
   <div id="bible-modal" class="hidden fixed inset-0 bg-black/80 flex items-center justify-center z-50">
     <div class="bg-gray-900 w-[820px] max-h-[90vh] rounded-2xl p-6 overflow-auto">
       <h2 class="text-2xl font-bold mb-6">Story Bible</h2>
-
       <div class="mb-8">
         <div class="flex justify-between items-center mb-3">
           <h3 class="text-lg font-semibold flex items-center gap-2"><i class="fas fa-users"></i> Characters</h3>
@@ -132,7 +140,6 @@
         </div>
         <div id="characters-list" class="space-y-4"></div>
       </div>
-
       <div class="mb-8">
         <div class="flex justify-between items-center mb-3">
           <h3 class="text-lg font-semibold flex items-center gap-2"><i class="fas fa-globe"></i> Worldbuilding</h3>
@@ -142,17 +149,14 @@
         </div>
         <div id="world-list" class="space-y-4"></div>
       </div>
-
       <div class="mb-8">
         <h3 class="text-lg font-semibold mb-3 flex items-center gap-2"><i class="fas fa-wand-magic-sparkles"></i> Magic System</h3>
         <textarea id="magic-system" class="w-full h-32 bg-gray-800 rounded-xl p-4"></textarea>
       </div>
-
       <div>
         <h3 class="text-lg font-semibold mb-3">Additional Notes</h3>
         <textarea id="bible-notes" class="w-full h-40 bg-gray-800 rounded-xl p-4"></textarea>
       </div>
-
       <div class="flex gap-3 mt-8 pt-4 border-t border-gray-700">
         <button onclick="saveBible()" class="flex-1 bg-purple-600 py-3 rounded-xl font-medium">Save Bible</button>
         <button onclick="closeBible()" class="flex-1 bg-gray-700 py-3 rounded-xl">Close</button>
@@ -212,6 +216,13 @@
     let lastSelection = null;
     let currentFolderFilter = "";
 
+    // === MULTI-AI PROVIDERS ===
+    const providers = {
+      gemini: { name: "Gemini", url: "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent" },
+      deepseek: { name: "DeepSeek", url: "https://api.deepseek.com/chat/completions" },
+      groq: { name: "Groq", url: "https://api.groq.com/openai/v1/chat/completions" }
+    };
+
     function loadStories() {
       const saved = localStorage.getItem('scribeStories');
       if (saved) stories = JSON.parse(saved);
@@ -227,16 +238,50 @@
       renderFolderDropdown();
       renderStoryList();
       loadCurrentStory();
+      switchProvider();
     }
 
     function saveData() {
       localStorage.setItem('scribeStories', JSON.stringify(stories));
     }
 
+    // === TRANSFER FUNCTIONS ===
+    function exportAllStories() {
+      const dataStr = JSON.stringify(stories, null, 2);
+      const blob = new Blob([dataStr], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Scribe_Backup_${new Date().toISOString().slice(0,10)}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      alert("✅ Backup downloaded! This includes all stories and Story Bibles.");
+    }
+
+    function importStories(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        try {
+          const importedStories = JSON.parse(e.target.result);
+          if (confirm(`Import ${importedStories.length} stories?`)) {
+            stories = stories.concat(importedStories);
+            renderFolderDropdown();
+            renderStoryList();
+            saveData();
+            alert("✅ Stories imported successfully!");
+          }
+        } catch(err) {
+          alert("❌ Invalid backup file.");
+        }
+      };
+      reader.readAsText(file);
+    }
+
     function renderFolderDropdown() {
       const folders = new Set();
       stories.forEach(s => { if (s.folder) folders.add(s.folder); });
-
       const select = document.getElementById('folder-dropdown');
       select.innerHTML = `<option value="">All Stories</option>`;
       folders.forEach(folder => {
@@ -264,10 +309,8 @@
     function renderStoryList() {
       const container = document.getElementById('story-list');
       container.innerHTML = '';
-
-      const filtered = currentFolderFilter ? 
+      const filtered = currentFolderFilter ?
         stories.filter(s => s.folder === currentFolderFilter) : stories;
-
       filtered.forEach((story) => {
         const i = stories.indexOf(story);
         const div = document.createElement('div');
@@ -323,7 +366,6 @@
       loadCurrentStory();
     }
 
-    // === ALL ORIGINAL FUNCTIONS BELOW (UNCHANGED) ===
     function loadCurrentStory() {
       const story = stories[currentStoryIndex];
       document.getElementById('story-title').value = story.title;
@@ -337,7 +379,6 @@
       const container = document.getElementById('chapter-tabs');
       container.innerHTML = '';
       const story = stories[currentStoryIndex];
-
       story.chapters.forEach((ch, i) => {
         const tab = document.createElement('div');
         tab.className = `px-6 py-2 rounded-t-lg whitespace-nowrap cursor-pointer flex items-center gap-2 ${i === currentChapterIndex ? 'tab-active' : 'hover:bg-gray-800'}`;
@@ -348,7 +389,6 @@
         `;
         container.appendChild(tab);
       });
-
       const addBtn = document.createElement('button');
       addBtn.className = "px-4 py-2 text-purple-400 hover:bg-gray-800 rounded-t-lg";
       addBtn.innerHTML = '+ New Chapter';
@@ -405,59 +445,58 @@
       saveData();
     });
 
-    // AI Functions
-    function continueWriting() {
-      document.getElementById('ai-prompt').value = "Continue writing the story naturally from where I left off. Maintain the same style and tone.";
-      callAI();
-    }
-
-    function showRewriteOptions() {
-      const menu = document.getElementById('rewrite-options');
-      menu.classList.toggle('hidden');
-    }
-
-    function rewriteWithOption(option) {
-      document.getElementById('rewrite-options').classList.add('hidden');
-      document.getElementById('ai-prompt').value = option;
-      rewriteSelected();
-    }
-
-    function rewriteSelected() {
-      const textarea = document.getElementById('chapter-content');
-      const start = textarea.selectionStart;
-      const end = textarea.selectionEnd;
-      const selectedText = textarea.value.substring(start, end).trim();
-
-      if (!selectedText) return alert("Please highlight some text first!");
-
-      lastSelection = { start, end, text: selectedText };
-      callAI(true);
+    // === MULTI-AI SUPPORT ===
+    function switchProvider() {
+      const provider = document.getElementById('ai-provider').value;
+      const savedKey = localStorage.getItem(`apiKey_${provider}`) || "";
+      document.getElementById('api-key').value = savedKey;
     }
 
     async function callAI(isRewrite = false) {
       const prompt = document.getElementById('ai-prompt').value.trim();
       const apiKey = document.getElementById('api-key').value.trim();
-      const currentText = document.getElementById('chapter-content').value.trim();
+      const providerName = document.getElementById('ai-provider').value;
 
-      if (!prompt || !apiKey) return alert("Please enter a prompt and your Gemini API key");
+      if (!prompt || !apiKey) return alert("Please enter a prompt and API key");
+
+      localStorage.setItem(`apiKey_${providerName}`, apiKey);
 
       const box = document.getElementById('ai-response');
       box.innerHTML = `<p class="text-purple-400">Thinking...</p>`;
 
       try {
-        const bible = stories[currentStoryIndex].bible;
-        const bibleText = `Characters: ${bible.characters.map(c => c.name + ": " + (c.desc||'')).join('; ')}\nWorld: ${bible.world.map(w => w.name + ": " + (w.desc||'')).join('; ')}\nMagic: ${bible.magic||'None'}\nNotes: ${bible.notes||'None'}`;
+        let requestBody = {};
+        let url = "";
 
-        const fullPrompt = `You are a talented novelist.\n\nStory Bible:\n${bibleText}\n\n${isRewrite && lastSelection ? "Original text to rewrite:\n" + lastSelection.text + "\n\n" : ""}Current Chapter:\n${currentText}\n\nRequest: ${prompt}\n\nRespond with only the rewritten text.`;
+        if (providerName === "gemini") {
+          const bible = stories[currentStoryIndex].bible || {};
+          const bibleText = `Characters: ${bible.characters.map(c => c.name + ": " + (c.desc||'')).join('; ')}\nWorld: ${bible.world.map(w => w.name + ": " + (w.desc||'')).join('; ')}\nMagic: ${bible.magic||'None'}\nNotes: ${bible.notes||'None'}`;
+          const fullPrompt = `You are a talented novelist.\n\nStory Bible:\n${bibleText}\n\n${isRewrite && lastSelection ? "Original text to rewrite:\n" + lastSelection.text + "\n\n" : ""}Current Chapter:\n${document.getElementById('chapter-content').value}\n\nRequest: ${prompt}\n\nRespond with only the rewritten text.`;
+          url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+          requestBody = { contents: [{ parts: [{ text: fullPrompt }] }] };
+        } else {
+          url = providers[providerName].url;
+          requestBody = {
+            model: providerName === "deepseek" ? "deepseek-chat" : "llama3-8b-8192",
+            messages: [{ role: "user", content: prompt }]
+          };
+        }
 
-        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
+        const res = await fetch(url, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ contents: [{ parts: [{ text: fullPrompt }] }] })
+          body: JSON.stringify(requestBody)
         });
 
+        if (res.status === 429) {
+          box.innerHTML = `<p class="text-yellow-400">Rate limit reached. Switch provider or wait.</p>`;
+          return;
+        }
+
         const data = await res.json();
-        const aiText = data.candidates?.[0]?.content?.parts?.[0]?.text || "No response.";
+        let aiText = providerName === "gemini" ? 
+          data.candidates?.[0]?.content?.parts?.[0]?.text : 
+          data.choices?.[0]?.message?.content || "No response.";
 
         box.innerHTML = `
           <pre class="whitespace-pre-wrap bg-gray-800 p-4 rounded-xl">${aiText}</pre>
@@ -490,6 +529,32 @@
       document.getElementById('ai-response').innerHTML += `<p class="text-green-400 mt-2">✓ Replaced successfully!</p>`;
     }
 
+    function continueWriting() {
+      document.getElementById('ai-prompt').value = "Continue writing the story naturally from where I left off. Maintain the same style and tone.";
+      callAI();
+    }
+
+    function showRewriteOptions() {
+      const menu = document.getElementById('rewrite-options');
+      menu.classList.toggle('hidden');
+    }
+
+    function rewriteWithOption(option) {
+      document.getElementById('rewrite-options').classList.add('hidden');
+      document.getElementById('ai-prompt').value = option;
+      rewriteSelected();
+    }
+
+    function rewriteSelected() {
+      const textarea = document.getElementById('chapter-content');
+      const start = textarea.selectionStart;
+      const end = textarea.selectionEnd;
+      const selectedText = textarea.value.substring(start, end).trim();
+      if (!selectedText) return alert("Please highlight some text first!");
+      lastSelection = { start, end, text: selectedText };
+      callAI(true);
+    }
+
     function updatePerspectiveSelect() {
       const select = document.getElementById('perspective');
       select.innerHTML = '<option value="">Neutral Narrator</option>';
@@ -504,7 +569,7 @@
       });
     }
 
-    // Bible Functions - RESTORED
+    // Bible Functions
     function toggleBible() {
       document.getElementById('bible-modal').classList.remove('hidden');
       renderBible();
@@ -513,19 +578,16 @@
     function renderBible() {
       let bible = stories[currentStoryIndex].bible;
       if (!bible) bible = stories[currentStoryIndex].bible = { characters: [], world: [], magic: "", notes: "" };
-
       document.getElementById('characters-list').innerHTML = bible.characters.map((char, i) => `
         <div class="bg-gray-800 rounded-xl p-4">
           <input value="${char.name || ''}" class="bg-transparent font-semibold w-full mb-2" onchange="updateCharacter(${i}, 'name', this.value)">
           <textarea class="w-full bg-gray-700 rounded-lg p-3 text-sm" onchange="updateCharacter(${i}, 'desc', this.value)">${char.desc || ''}</textarea>
         </div>`).join('');
-
       document.getElementById('world-list').innerHTML = bible.world.map((item, i) => `
         <div class="bg-gray-800 rounded-xl p-4">
           <input value="${item.name || ''}" class="bg-transparent font-semibold w-full mb-2" onchange="updateWorld(${i}, 'name', this.value)">
           <textarea class="w-full bg-gray-700 rounded-lg p-3 text-sm" onchange="updateWorld(${i}, 'desc', this.value)">${item.desc || ''}</textarea>
         </div>`).join('');
-
       document.getElementById('magic-system').value = bible.magic || "";
       document.getElementById('bible-notes').value = bible.notes || "";
     }
