@@ -9,19 +9,29 @@
   <style>
     body { font-family: 'Inter', system-ui, sans-serif; }
     .editor { resize: none; line-height: 1.8; font-size: 1.1rem; }
-    .tab-active { background-color: rgb(31 41 55); border-bottom: 3px solid rgb(168 85 247); }
+    
+    /* Theme Colors */
+    :root { --accent-color: 168 85 247; }
+    .theme-purple { --accent-color: 168 85 247; }
+    .theme-blue { --accent-color: 59 130 246; }
+    .theme-emerald { --accent-color: 16 185 129; }
+    .theme-rose { --accent-color: 244 63 94; }
+    
+    .accent-bg { background-color: rgb(var(--accent-color)); }
+    .accent-hover:hover { background-color: rgb(var(--accent-color) / 0.9); }
+    .accent-text { color: rgb(var(--accent-color)); }
   </style>
 </head>
-<body class="bg-gray-950 text-gray-100 min-h-screen">
+<body class="bg-gray-950 text-gray-100 min-h-screen theme-purple">
 
   <div class="flex h-screen">
     <!-- Sidebar -->
     <div class="w-64 border-r border-gray-800 bg-gray-900 flex flex-col">
       <div class="p-4 border-b border-gray-800">
-        <h1 class="text-2xl font-bold text-purple-400">Scribe</h1>
+        <h1 class="text-2xl font-bold accent-text">Scribe</h1>
       </div>
       <div class="p-4">
-        <button onclick="newStory()" class="w-full bg-purple-600 hover:bg-purple-700 py-3 rounded-xl flex items-center justify-center gap-2 font-medium">
+        <button onclick="newStory()" class="w-full accent-bg hover:accent-hover py-3 rounded-xl flex items-center justify-center gap-2 font-medium">
           <i class="fas fa-plus"></i> New Story
         </button>
       </div>
@@ -29,7 +39,7 @@
       <!-- Folders Dropdown -->
       <div class="px-4 text-xs uppercase text-gray-500 mt-4 mb-2 flex justify-between items-center">
         <span>Folders</span>
-        <button onclick="createNewFolder()" class="text-purple-400 hover:text-purple-300">+</button>
+        <button onclick="createNewFolder()" class="accent-text hover:text-purple-300">+</button>
       </div>
       <div class="px-4 mb-3">
         <select id="folder-dropdown" onchange="filterByFolder(this.value)" class="w-full bg-gray-800 rounded-lg p-2 text-sm">
@@ -48,7 +58,6 @@
           <i class="fas fa-cog"></i> Settings
         </button>
         
-        <!-- Transfer Features Added -->
         <button onclick="exportAllStories()" class="w-full flex items-center gap-3 py-3 px-4 hover:bg-gray-800 rounded-xl text-green-400">
           <i class="fas fa-download"></i> Export All Stories
         </button>
@@ -70,11 +79,16 @@
         </div>
       </div>
 
-      <div class="border-b border-gray-800 px-4 py-2 flex gap-2 overflow-x-auto bg-gray-900" id="chapter-tabs"></div>
+      <!-- Chapter Dropdown -->
+      <div class="border-b border-gray-800 px-4 py-3 bg-gray-900 flex items-center gap-3">
+        <select id="chapter-dropdown" onchange="switchChapter(this.value)" class="bg-gray-800 text-white rounded-lg px-4 py-2 flex-1"></select>
+        <button onclick="renameCurrentChapter()" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm">Rename</button>
+        <button onclick="deleteCurrentChapter()" class="px-4 py-2 bg-red-700 hover:bg-red-600 rounded-lg text-sm">Delete</button>
+        <button onclick="newChapter()" class="px-4 py-2 accent-bg hover:accent-hover rounded-lg text-sm">+ New</button>
+      </div>
 
       <div class="flex-1 relative">
         <textarea id="chapter-content" class="w-full h-full bg-gray-950 p-8 editor focus:outline-none" placeholder="Write your chapter here..."></textarea>
-        <div id="word-count" class="absolute bottom-4 right-6 bg-gray-900 px-4 py-1 rounded-full text-sm text-gray-400"></div>
       </div>
     </div>
 
@@ -85,9 +99,8 @@
       <div class="p-4 border-b border-gray-800">
         <label class="text-xs text-gray-500 block mb-1">AI Provider</label>
         <select id="ai-provider" onchange="switchProvider()" class="w-full bg-gray-800 rounded-lg p-2 mb-3 text-sm">
+          <option value="deepseek" selected>DeepSeek Chat (Recommended)</option>
           <option value="gemini">Gemini 2.5 Flash</option>
-          <option value="deepseek">DeepSeek Chat</option>
-          <option value="groq">Groq (Llama)</option>
         </select>
         <input id="api-key" type="password" placeholder="API Key" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm">
       </div>
@@ -96,7 +109,7 @@
         <button onclick="continueWriting()" class="w-full bg-emerald-600 hover:bg-emerald-700 py-3 rounded-xl font-medium mb-3">
           ▶️ Continue Writing
         </button>
-        <button onclick="showRewriteOptions()" class="w-full bg-purple-600 hover:bg-purple-700 py-3 rounded-xl font-medium mb-3">
+        <button onclick="showRewriteOptions()" class="w-full accent-bg hover:accent-hover py-3 rounded-xl font-medium mb-3">
           ✨ Rewrite Selected Text
         </button>
       </div>
@@ -110,7 +123,7 @@
       
       <div class="p-4 border-t border-gray-800">
         <textarea id="ai-prompt" rows="3" class="w-full bg-gray-800 rounded-xl p-3 focus:outline-none text-sm" placeholder="Custom request..."></textarea>
-        <button onclick="callAI()" class="mt-3 w-full bg-purple-600 hover:bg-purple-700 py-3 rounded-xl font-medium">Send to AI</button>
+        <button onclick="callAI()" class="mt-3 w-full accent-bg hover:accent-hover py-3 rounded-xl font-medium">Send to AI</button>
       </div>
     </div>
   </div>
@@ -216,11 +229,21 @@
     let lastSelection = null;
     let currentFolderFilter = "";
 
-    // === MULTI-AI PROVIDERS ===
-    const providers = {
-      gemini: { name: "Gemini", url: "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent" },
-      deepseek: { name: "DeepSeek", url: "https://api.deepseek.com/chat/completions" },
-      groq: { name: "Groq", url: "https://api.groq.com/openai/v1/chat/completions" }
+    const aiProviders = {
+      deepseek: {
+        name: "DeepSeek",
+        url: "https://api.deepseek.com/chat/completions",
+        model: "deepseek-chat",
+        headers: (apiKey) => ({
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${apiKey}`
+        })
+      },
+      gemini: {
+        name: "Gemini 2.5 Flash",
+        url: (apiKey) => `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+        headers: () => ({ "Content-Type": "application/json" })
+      }
     };
 
     function loadStories() {
@@ -245,7 +268,6 @@
       localStorage.setItem('scribeStories', JSON.stringify(stories));
     }
 
-    // === TRANSFER FUNCTIONS ===
     function exportAllStories() {
       const dataStr = JSON.stringify(stories, null, 2);
       const blob = new Blob([dataStr], { type: "application/json" });
@@ -369,62 +391,57 @@
     function loadCurrentStory() {
       const story = stories[currentStoryIndex];
       document.getElementById('story-title').value = story.title;
-      renderChapterTabs();
+      renderChapterDropdown();
       document.getElementById('chapter-content').value = story.chapters[currentChapterIndex]?.content || "";
-      updateWordCount();
       updatePerspectiveSelect();
     }
 
-    function renderChapterTabs() {
-      const container = document.getElementById('chapter-tabs');
-      container.innerHTML = '';
+    function renderChapterDropdown() {
+      const select = document.getElementById('chapter-dropdown');
+      select.innerHTML = '';
       const story = stories[currentStoryIndex];
       story.chapters.forEach((ch, i) => {
-        const tab = document.createElement('div');
-        tab.className = `px-6 py-2 rounded-t-lg whitespace-nowrap cursor-pointer flex items-center gap-2 ${i === currentChapterIndex ? 'tab-active' : 'hover:bg-gray-800'}`;
-        tab.innerHTML = `
-          <span onclick="switchChapter(${i})">${ch.title}</span>
-          <button onclick="event.stopImmediatePropagation(); renameChapter(${i});" class="text-xs opacity-70">✏️</button>
-          <button onclick="event.stopImmediatePropagation(); deleteChapter(${i});" class="text-xs text-red-400 opacity-70">🗑️</button>
-        `;
-        container.appendChild(tab);
+        const option = document.createElement('option');
+        option.value = i;
+        option.textContent = ch.title;
+        if (i === currentChapterIndex) option.selected = true;
+        select.appendChild(option);
       });
-      const addBtn = document.createElement('button');
-      addBtn.className = "px-4 py-2 text-purple-400 hover:bg-gray-800 rounded-t-lg";
-      addBtn.innerHTML = '+ New Chapter';
-      addBtn.onclick = () => {
-        story.chapters.push({ title: `Chapter ${story.chapters.length + 1}`, content: "" });
-        currentChapterIndex = story.chapters.length - 1;
-        renderChapterTabs();
-        loadCurrentStory();
-      };
-      container.appendChild(addBtn);
     }
 
-    function switchChapter(i) {
-      currentChapterIndex = i;
-      renderChapterTabs();
+    function switchChapter(value) {
+      currentChapterIndex = parseInt(value);
       loadCurrentStory();
     }
 
-    function renameChapter(i) {
-      const newName = prompt("New chapter name:", stories[currentStoryIndex].chapters[i].title);
+    function renameCurrentChapter() {
+      const story = stories[currentStoryIndex];
+      const newName = prompt("New chapter name:", story.chapters[currentChapterIndex].title);
       if (newName && newName.trim() !== "") {
-        stories[currentStoryIndex].chapters[i].title = newName.trim();
-        renderChapterTabs();
+        story.chapters[currentChapterIndex].title = newName.trim();
+        renderChapterDropdown();
         saveData();
       }
     }
 
-    function deleteChapter(i) {
-      if (stories[currentStoryIndex].chapters.length === 1) return alert("You must keep at least one chapter.");
-      if (confirm("Delete this chapter?")) {
-        stories[currentStoryIndex].chapters.splice(i, 1);
-        if (currentChapterIndex >= stories[currentStoryIndex].chapters.length) currentChapterIndex = stories[currentStoryIndex].chapters.length - 1;
-        renderChapterTabs();
+    function deleteCurrentChapter() {
+      const story = stories[currentStoryIndex];
+      if (story.chapters.length === 1) return alert("You must keep at least one chapter.");
+      if (confirm(`Delete "${story.chapters[currentChapterIndex].title}"?`)) {
+        story.chapters.splice(currentChapterIndex, 1);
+        if (currentChapterIndex >= story.chapters.length) currentChapterIndex = story.chapters.length - 1;
+        renderChapterDropdown();
         loadCurrentStory();
         saveData();
       }
+    }
+
+    function newChapter() {
+      const story = stories[currentStoryIndex];
+      story.chapters.push({ title: `Chapter ${story.chapters.length + 1}`, content: "" });
+      currentChapterIndex = story.chapters.length - 1;
+      renderChapterDropdown();
+      loadCurrentStory();
     }
 
     function updateTitle() {
@@ -433,19 +450,11 @@
       saveData();
     }
 
-    function updateWordCount() {
-      const text = document.getElementById('chapter-content').value;
-      const words = text.trim().split(/\s+/).filter(Boolean).length;
-      document.getElementById('word-count').innerHTML = `${words} words`;
-    }
-
     document.getElementById('chapter-content').addEventListener('input', () => {
       stories[currentStoryIndex].chapters[currentChapterIndex].content = document.getElementById('chapter-content').value;
-      updateWordCount();
       saveData();
     });
 
-    // === MULTI-AI SUPPORT ===
     function switchProvider() {
       const provider = document.getElementById('ai-provider').value;
       const savedKey = localStorage.getItem(`apiKey_${provider}`) || "";
@@ -455,56 +464,74 @@
     async function callAI(isRewrite = false) {
       const prompt = document.getElementById('ai-prompt').value.trim();
       const apiKey = document.getElementById('api-key').value.trim();
-      const providerName = document.getElementById('ai-provider').value;
+      const providerKey = document.getElementById('ai-provider').value;
+      const provider = aiProviders[providerKey];
 
-      if (!prompt || !apiKey) return alert("Please enter a prompt and API key");
+      if (!prompt || !apiKey) {
+        return alert("Please enter both a prompt and your API key");
+      }
 
-      localStorage.setItem(`apiKey_${providerName}`, apiKey);
+      localStorage.setItem(`apiKey_${providerKey}`, apiKey);
 
       const box = document.getElementById('ai-response');
-      box.innerHTML = `<p class="text-purple-400">Thinking...</p>`;
+      box.innerHTML = `<p class="text-purple-400">Thinking with ${provider.name}...</p>`;
 
       try {
         let requestBody = {};
         let url = "";
 
-        if (providerName === "gemini") {
-          const bible = stories[currentStoryIndex].bible || {};
-          const bibleText = `Characters: ${bible.characters.map(c => c.name + ": " + (c.desc||'')).join('; ')}\nWorld: ${bible.world.map(w => w.name + ": " + (w.desc||'')).join('; ')}\nMagic: ${bible.magic||'None'}\nNotes: ${bible.notes||'None'}`;
-          const fullPrompt = `You are a talented novelist.\n\nStory Bible:\n${bibleText}\n\n${isRewrite && lastSelection ? "Original text to rewrite:\n" + lastSelection.text + "\n\n" : ""}Current Chapter:\n${document.getElementById('chapter-content').value}\n\nRequest: ${prompt}\n\nRespond with only the rewritten text.`;
-          url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+        const bible = stories[currentStoryIndex].bible || {};
+        const bibleText = `Characters: ${bible.characters.map(c => c.name + ": " + (c.desc||'')).join('; ')}\nWorld: ${bible.world.map(w => w.name + ": " + (w.desc||'')).join('; ')}\nMagic: ${bible.magic||'None'}\nNotes: ${bible.notes||'None'}`;
+
+        const fullPrompt = `You are a talented novelist.\n\nStory Bible:\n${bibleText}\n\nCurrent Chapter:\n${document.getElementById('chapter-content').value}\n\n${isRewrite && lastSelection ? "Original text to rewrite:\n" + lastSelection.text + "\n\n" : ""}Request: ${prompt}\n\nRespond with ONLY the new or revised text. No explanations.`;
+
+        if (providerKey === "gemini") {
+          url = provider.url(apiKey);
           requestBody = { contents: [{ parts: [{ text: fullPrompt }] }] };
         } else {
-          url = providers[providerName].url;
+          url = provider.url;
           requestBody = {
-            model: providerName === "deepseek" ? "deepseek-chat" : "llama3-8b-8192",
-            messages: [{ role: "user", content: prompt }]
+            model: provider.model,
+            messages: [
+              { role: "system", content: "You are a talented novelist. Maintain consistent style, tone, and character voices." },
+              { role: "user", content: fullPrompt }
+            ],
+            temperature: 0.7,
+            max_tokens: 2000
           };
         }
 
         const res = await fetch(url, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: provider.headers ? provider.headers(apiKey) : { "Content-Type": "application/json" },
           body: JSON.stringify(requestBody)
         });
 
-        if (res.status === 429) {
-          box.innerHTML = `<p class="text-yellow-400">Rate limit reached. Switch provider or wait.</p>`;
-          return;
+        if (!res.ok) {
+          if (res.status === 402) {
+            throw new Error("Payment Required - Please add funds to your " + provider.name + " account.");
+          }
+          throw new Error(`API Error: ${res.status}`);
         }
 
         const data = await res.json();
-        let aiText = providerName === "gemini" ? 
-          data.candidates?.[0]?.content?.parts?.[0]?.text : 
-          data.choices?.[0]?.message?.content || "No response.";
+        
+        let aiText = "";
+        if (providerKey === "gemini") {
+          aiText = data.candidates?.[0]?.content?.parts?.[0]?.text || "No response from Gemini.";
+        } else {
+          aiText = data.choices?.[0]?.message?.content || "No response from DeepSeek.";
+        }
 
         box.innerHTML = `
-          <pre class="whitespace-pre-wrap bg-gray-800 p-4 rounded-xl">${aiText}</pre>
+          <pre class="whitespace-pre-wrap bg-gray-800 p-4 rounded-xl text-sm leading-relaxed">${aiText}</pre>
           <div class="flex gap-3 mt-4">
             <button onclick="copyAIResponse(this)" class="flex-1 bg-gray-700 hover:bg-gray-600 py-2 rounded-lg text-sm">Copy</button>
-            ${isRewrite ? `<button onclick="replaceSelection('${aiText.replace(/'/g, "\\'").replace(/\n/g, "\\n")}')" class="flex-1 bg-purple-600 hover:bg-purple-700 py-2 rounded-lg text-sm">Replace Selected</button>` : ''}
+            ${isRewrite ? `<button onclick="replaceSelection(\`${aiText.replace(/`/g, '\\`').replace(/\$/g, '\\$')}\`)" class="flex-1 accent-bg hover:accent-hover py-2 rounded-lg text-sm">Replace Selected</button>` : ''}
           </div>`;
-      } catch(e) {
+
+      } catch (e) {
+        console.error(e);
         box.innerHTML = `<p class="text-red-400">Error: ${e.message}</p>`;
       }
     }
@@ -519,14 +546,19 @@
     function replaceSelection(newText) {
       const textarea = document.getElementById('chapter-content');
       if (!lastSelection) return;
+
       const full = textarea.value;
       const updated = full.substring(0, lastSelection.start) + newText + full.substring(lastSelection.end);
+
       textarea.value = updated;
       stories[currentStoryIndex].chapters[currentChapterIndex].content = updated;
       saveData();
-      updateWordCount();
       lastSelection = null;
-      document.getElementById('ai-response').innerHTML += `<p class="text-green-400 mt-2">✓ Replaced successfully!</p>`;
+
+      const responseBox = document.getElementById('ai-response');
+      responseBox.innerHTML += `<p class="text-green-400 mt-3 font-medium">✓ Replaced successfully!</p>`;
+
+      textarea.focus();
     }
 
     function continueWriting() {
@@ -631,7 +663,7 @@
     }
 
     function changeTheme(color) {
-      alert("Theme changed to " + color + " (visual update coming soon)");
+      document.body.className = `bg-gray-950 text-gray-100 theme-${color}`;
       closeSettings();
     }
 
